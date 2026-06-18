@@ -3,7 +3,10 @@
     <div
       class="tree-row"
       :style="{ paddingLeft: (depth * 20 + 16) + 'px' }"
-      :class="{ selected: item.relativePath === selectedPath }"
+      :class="{
+        selected: item.relativePath === selectedPath,
+        'row-identical': item.status === 'identical' && !item.isDirectory
+      }"
       @click="handleClick"
     >
       <span class="row-status">
@@ -84,6 +87,15 @@ function formatSize(bytes?: number): string {
 
 .tree-row.selected {
   background: var(--bg-tree-selected);
+}
+
+.row-identical {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.row-identical:hover {
+  background: transparent;
 }
 
 .row-status {

@@ -41,6 +41,11 @@
         :class="{ active: mode === 'merge' }"
         @click="switchMode('merge')"
       >3-Way Merge</button>
+      <button
+        class="mode-btn"
+        :class="{ active: mode === 'compare3' }"
+        @click="switchMode('compare3')"
+      >3-Way Compare</button>
       <div class="mode-bar-spacer"></div>
       <button class="theme-toggle" @click="toggleTheme" :title="isDark ? 'Light mode' : 'Dark mode'">
         {{ isDark ? '☀' : '☾' }}
@@ -78,14 +83,20 @@
       />
 
       <div v-if="hasContent" class="file-bar">
-        <span class="file-info">Left: {{ leftFilename || 'untitled' }}</span>
-        <span class="file-info">Right: {{ rightFilename || 'untitled' }}</span>
-        <div v-if="hasDiffs" class="diff-stats">
-          <span class="stat stat-add">+{{ diffStats.additions }}</span>
-          <span class="stat stat-del">-{{ diffStats.deletions }}</span>
-          <span class="stat stat-mod">~{{ diffStats.modifications }}</span>
+        <div class="file-bar-left">
+          <span class="file-info left-file">Left: {{ leftFilename || 'untitled' }}</span>
         </div>
-        <button class="change-btn" @click="resetInput">Change files</button>
+        <div class="file-bar-center">
+          <div v-if="hasDiffs" class="diff-stats">
+            <span class="stat stat-add">+{{ diffStats.additions }}</span>
+            <span class="stat stat-del">-{{ diffStats.deletions }}</span>
+            <span class="stat stat-mod">~{{ diffStats.modifications }}</span>
+          </div>
+          <button class="change-btn" @click="resetInput">Change files</button>
+        </div>
+        <div class="file-bar-right">
+          <span class="file-info right-file">Right: {{ rightFilename || 'untitled' }}</span>
+        </div>
       </div>
 
       <DiffEditorPanel
@@ -126,8 +137,10 @@
           :algo="diffAlgo"
           :has-content="false"
           :has-diffs="false"
+          @toggle-ignore-whitespace="ignoreWhitespace = !ignoreWhitespace"
+          @toggle-word-wrap="wordWrap = !wordWrap"
           @font-size-change="fontSize = Math.max(10, Math.min(30, fontSize + $event))"
-@toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
+          @toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
         />
         <FolderInputPanel
           :left-name="leftDir?.name || ''"
@@ -139,6 +152,7 @@
           @pickright="pickFolder('right')"
           @compare="runCompare"
           @back="resetFolder"
+          @drop-folder="handleDropFolder"
         />
       </template>
 
@@ -155,10 +169,33 @@
 
       <!-- Folder File Diff -->
       <template v-if="folderView === 'file-diff'">
+        <Toolbar
+          :left-filename="`.../${selectedFilePath}`"
+          :right-filename="`.../${selectedFilePath}`"
+          :ignore-whitespace="ignoreWhitespace"
+          :word-wrap="wordWrap"
+          :font-size="fontSize"
+          :algo="diffAlgo"
+          :has-content="true"
+          :has-diffs="hasDiffs"
+          @toggle-ignore-whitespace="ignoreWhitespace = !ignoreWhitespace"
+          @toggle-word-wrap="wordWrap = !wordWrap"
+          @font-size-change="fontSize = Math.max(10, Math.min(30, fontSize + $event))"
+          @toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
+          @previous-diff="folderDiffRef?.navigateDiff('previous')"
+          @next-diff="folderDiffRef?.navigateDiff('next')"
+          @download-left="handleDownload('folder-left')"
+          @download-right="handleDownload('folder-right')"
+          @export-html="handleFolderExportHtml"
+          @export-json="handleFolderExportJson"
+        />
         <div class="file-bar">
-          <span class="file-info">Left: {{ `.../${selectedFilePath}` }}</span>
-          <span class="file-info">Right: {{ `.../${selectedFilePath}` }}</span>
-          <button class="change-btn" @click="folderView = 'tree'">Back to folder view</button>
+          <div class="file-bar-center">
+            <button class="nav-btn-small" @click="navigateFolderFile('prev')" :disabled="comparableFiles.length <= 1">&lt; Prev file</button>
+            <span class="file-position">{{ folderFileIndex + 1 }} / {{ comparableFiles.length }}</span>
+            <button class="nav-btn-small" @click="navigateFolderFile('next')" :disabled="comparableFiles.length <= 1">Next file &gt;</button>
+            <button class="change-btn" @click="folderView = 'tree'">Back to folder view</button>
+          </div>
         </div>
         <DiffEditorPanel
           ref="folderDiffRef"
@@ -182,19 +219,141 @@
         v-if="mergeView === 'input'"
         @start="handleMergeStart"
       />
-      <MergeEditorPanel
-        v-if="mergeView === 'merge'"
-        :base="mergeBase"
-        :ours="mergeOurs"
-        :theirs="mergeTheirs"
-        :base-name="mergeBaseName"
-        :ours-name="mergeOursName"
-        :theirs-name="mergeTheirsName"
-        :language="language"
-        :dark="isDark"
-        @back="mergeView = 'input'"
-      />
+      <template v-if="mergeView === 'merge'">
+        <Toolbar
+          :left-filename="mergeBaseName"
+          :right-filename="`${mergeOursName} / ${mergeTheirsName}`"
+          :ignore-whitespace="ignoreWhitespace"
+          :word-wrap="wordWrap"
+          :font-size="fontSize"
+          :algo="diffAlgo"
+          :has-content="true"
+          :has-diffs="false"
+          @toggle-ignore-whitespace="ignoreWhitespace = !ignoreWhitespace"
+          @toggle-word-wrap="wordWrap = !wordWrap"
+          @font-size-change="fontSize = Math.max(10, Math.min(30, fontSize + $event))"
+          @toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
+        />
+        <MergeEditorPanel
+          :base="mergeBase"
+          :ours="mergeOurs"
+          :theirs="mergeTheirs"
+          :base-name="mergeBaseName"
+          :ours-name="mergeOursName"
+          :theirs-name="mergeTheirsName"
+          :language="language"
+          :dark="isDark"
+          :font-size="fontSize"
+          :word-wrap="wordWrap"
+          :ignore-whitespace="ignoreWhitespace"
+          :algo="diffAlgo"
+          @back="mergeView = 'input'"
+        />
+      </template>
     </template>
+
+    <!-- 3-Way Compare Mode -->
+    <template v-if="mode === 'compare3'">
+      <template v-if="c3View === 'input'">
+        <Toolbar
+          :left-filename="c3LeftName || ''"
+          :right-filename="c3RightName || ''"
+          :ignore-whitespace="ignoreWhitespace"
+          :word-wrap="wordWrap"
+          :font-size="fontSize"
+          :algo="diffAlgo"
+          :has-content="false"
+          :has-diffs="false"
+          @toggle-ignore-whitespace="ignoreWhitespace = !ignoreWhitespace"
+          @toggle-word-wrap="wordWrap = !wordWrap"
+          @font-size-change="fontSize = Math.max(10, Math.min(30, fontSize + $event))"
+          @toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
+        />
+        <Compare3InputPanel
+          @compare-files="handleC3CompareFiles"
+          @compare-folders="handleC3CompareFolders"
+        />
+      </template>
+
+      <template v-if="c3View === 'editor'">
+        <Toolbar
+          :left-filename="c3LeftName || 'left'"
+          :right-filename="c3RightName || 'right'"
+          :ignore-whitespace="ignoreWhitespace"
+          :word-wrap="wordWrap"
+          :font-size="fontSize"
+          :algo="diffAlgo"
+          :has-content="true"
+          :has-diffs="false"
+          @toggle-ignore-whitespace="ignoreWhitespace = !ignoreWhitespace"
+          @toggle-word-wrap="wordWrap = !wordWrap"
+          @font-size-change="fontSize = Math.max(10, Math.min(30, fontSize + $event))"
+          @toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
+        />
+        <div class="file-bar">
+          <div class="file-bar-center">
+            <button class="change-btn" @click="c3View = 'input'">Change files</button>
+          </div>
+        </div>
+        <Compare3EditorPanel
+          :left-text="c3LeftText"
+          :middle-text="c3MiddleText"
+          :right-text="c3RightText"
+          :language="c3Language"
+          :font-size="fontSize"
+          :word-wrap="wordWrap"
+          :dark="isDark"
+          @update:left-text="c3LeftText = $event"
+          @update:middle-text="c3MiddleText = $event"
+          @update:right-text="c3RightText = $event"
+        />
+      </template>
+
+      <template v-if="c3View === 'folder'">
+        <Compare3FolderPanel
+          :results="c3CompareResults"
+          :selected-path="c3SelectedPath"
+          @select-file="handleC3OpenFileDiff"
+          @back="c3View = 'input'"
+        />
+      </template>
+
+      <template v-if="c3View === 'file-diff'">
+        <Toolbar
+          :left-filename="c3LeftDir?.name || 'left'"
+          :right-filename="c3RightDir?.name || 'right'"
+          :ignore-whitespace="ignoreWhitespace"
+          :word-wrap="wordWrap"
+          :font-size="fontSize"
+          :algo="diffAlgo"
+          :has-content="true"
+          :has-diffs="false"
+          @toggle-ignore-whitespace="ignoreWhitespace = !ignoreWhitespace"
+          @toggle-word-wrap="wordWrap = !wordWrap"
+          @font-size-change="fontSize = Math.max(10, Math.min(30, fontSize + $event))"
+          @toggle-algo="diffAlgo = diffAlgo === 'advanced' ? 'legacy' : 'advanced'"
+        />
+        <div class="file-bar">
+          <div class="file-bar-center">
+            <span class="file-position">{{ c3SelectedPath }}</span>
+            <button class="change-btn" @click="c3View = 'folder'">Back to folder view</button>
+          </div>
+        </div>
+        <Compare3EditorPanel
+          :left-text="c3FolderLeftText"
+          :middle-text="c3FolderMiddleText"
+          :right-text="c3FolderRightText"
+          :language="c3FolderLanguage"
+          :font-size="fontSize"
+          :word-wrap="wordWrap"
+          :dark="isDark"
+          @update:left-text="c3FolderLeftText = $event"
+          @update:middle-text="c3FolderMiddleText = $event"
+          @update:right-text="c3FolderRightText = $event"
+        />
+      </template>
+    </template>
+
     <div v-if="showShortcuts" class="shortcuts-overlay" @click="showShortcuts = false">
       <div class="shortcuts-modal" @click.stop>
         <div class="shortcuts-header">
@@ -226,8 +385,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { detectLanguageFromFilename } from './utils/detectLanguage'
 import { buildDownloadFilename, downloadTextFile } from './utils/downloadFile'
 import { buildDiffLines, exportHtml, exportJson } from './utils/exportReport'
-import { pickDirectory, compareDirs, readFileFromDir } from './utils/directoryCompare'
-import type { CompareResult, DirSnapshot } from './utils/directoryCompare'
+import { pickDirectory, compareDirs, compareDirs3, readFileFromDir, readFileFromDirEntry, pickDirectoryFromDrop } from './utils/directoryCompare'
+import type { CompareResult, DirSnapshot, Compare3Result } from './utils/directoryCompare'
 import FileInputPanel from './components/FileInputPanel.vue'
 import Toolbar from './components/Toolbar.vue'
 import DiffEditorPanel from './components/DiffEditorPanel.vue'
@@ -235,6 +394,9 @@ import FolderInputPanel from './components/FolderInputPanel.vue'
 import FolderComparePanel from './components/FolderComparePanel.vue'
 import MergeInputPanel from './components/MergeInputPanel.vue'
 import MergeEditorPanel from './components/MergeEditorPanel.vue'
+import Compare3InputPanel from './components/Compare3InputPanel.vue'
+import Compare3EditorPanel from './components/Compare3EditorPanel.vue'
+import Compare3FolderPanel from './components/Compare3FolderPanel.vue'
 
 // File mode state
 const leftText = ref('')
@@ -260,6 +422,11 @@ const folderDiffRef = ref<InstanceType<typeof DiffEditorPanel> | null>(null)
 
 const leftDir = ref<DirSnapshot | null>(null)
 
+const folderFileIndex = ref(0)
+const comparableFiles = computed(() =>
+  compareResults.value.filter(r => r.status !== 'identical')
+)
+
 // Merge mode state
 const mergeView = ref<'input' | 'merge'>('input')
 const mergeBase = ref('')
@@ -271,8 +438,41 @@ const mergeTheirsName = ref('')
 const rightDir = ref<DirSnapshot | null>(null)
 const compareResults = ref<CompareResult[]>([])
 
+// 3-Way Compare mode state
+const c3View = ref<'input' | 'editor' | 'folder' | 'file-diff'>('input')
+const c3LeftText = ref('')
+const c3MiddleText = ref('')
+const c3RightText = ref('')
+const c3LeftName = ref('')
+const c3MiddleName = ref('')
+const c3RightName = ref('')
+const c3LeftDir = ref<DirSnapshot | null>(null)
+const c3MiddleDir = ref<DirSnapshot | null>(null)
+const c3RightDir = ref<DirSnapshot | null>(null)
+const c3CompareResults = ref<Compare3Result[]>([])
+const c3SelectedPath = ref('')
+const c3FolderLeftText = ref('')
+const c3FolderMiddleText = ref('')
+const c3FolderRightText = ref('')
+const c3FolderLanguage = ref('plaintext')
+const c3FileIndex = ref(0)
+
+const c3Language = computed(() => {
+  if (c3RightName.value) return detectLanguageFromFilename(c3RightName.value)
+  if (c3MiddleName.value) return detectLanguageFromFilename(c3MiddleName.value)
+  if (c3LeftName.value) return detectLanguageFromFilename(c3LeftName.value)
+  return 'plaintext'
+})
+
+const c3ComparableFiles = computed(() =>
+  c3CompareResults.value.filter(r => {
+    const sizes = [r.leftSize, r.middleSize, r.rightSize]
+    return !sizes.every(s => s != null && s === sizes[0])
+  })
+)
+
 // Mode
-const mode = ref<'file' | 'folder' | 'merge'>('file')
+const mode = ref<'file' | 'folder' | 'merge' | 'compare3'>('file')
 
 // Shortcuts
 const showShortcuts = ref(false)
@@ -300,6 +500,20 @@ function onKeydown(e: KeyboardEvent) {
       if (e.shiftKey) previousDiff()
       else nextDiff()
       break
+    case ' ArrowUp':
+    case 'arrowup':
+      if (e.shiftKey) {
+        e.preventDefault()
+        previousDiff()
+      }
+      break
+    case ' ArrowDown':
+    case 'arrowdown':
+      if (e.shiftKey) {
+        e.preventDefault()
+        nextDiff()
+      }
+      break
     case 'w':
       e.preventDefault()
       wordWrap.value = !wordWrap.value
@@ -325,10 +539,10 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('keydown', onKeydown, true)
 })
 onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keydown', onKeydown, true)
 })
 
 watch(isDark, (val) => {
@@ -366,11 +580,21 @@ function resetInput() {
   hasDiffs.value = false
 }
 
-function handleDownload(side: 'left' | 'right') {
-  const content = side === 'left' ? leftText.value : rightText.value
-  const filename = side === 'left'
-    ? buildDownloadFilename('left', leftFilename.value)
-    : buildDownloadFilename('right', rightFilename.value)
+function handleDownload(side: 'left' | 'right' | 'folder-left' | 'folder-right') {
+  let content: string
+  let filename: string
+  if (side === 'folder-left') {
+    content = folderLeftText.value
+    filename = buildDownloadFilename('left', selectedFilePath.value || 'left')
+  } else if (side === 'folder-right') {
+    content = folderRightText.value
+    filename = buildDownloadFilename('right', selectedFilePath.value || 'right')
+  } else {
+    content = side === 'left' ? leftText.value : rightText.value
+    filename = side === 'left'
+      ? buildDownloadFilename('left', leftFilename.value)
+      : buildDownloadFilename('right', rightFilename.value)
+  }
   downloadTextFile(content, filename)
 }
 
@@ -398,6 +622,23 @@ async function pickFolder(side: 'left' | 'right') {
   }
 }
 
+async function handleDropFolder(side: 'left' | 'right', dataTransfer: DataTransfer) {
+  folderError.value = ''
+  const item = dataTransfer.items[0]
+  if (!item) return
+  try {
+    const snapshot = await pickDirectoryFromDrop(item)
+    if (side === 'left') {
+      leftDir.value = snapshot
+    } else {
+      rightDir.value = snapshot
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to read dropped folder'
+    folderError.value = msg
+  }
+}
+
 async function runCompare() {
   if (!leftDir.value || !rightDir.value) return
   folderError.value = ''
@@ -411,13 +652,49 @@ async function openFileDiff(path: string) {
   folderFileLanguage.value = detectLanguageFromFilename(path)
 
   try {
-    const [leftContent, rightContent] = await Promise.all([
-      readFileFromDir(leftDir.value.handle, path),
-      readFileFromDir(rightDir.value.handle, path)
-    ])
+    const leftRead = leftDir.value.handle
+      ? readFileFromDir(leftDir.value.handle, path)
+      : readFileFromDirEntry(leftDir.value.entry!, path)
+    const rightRead = rightDir.value.handle
+      ? readFileFromDir(rightDir.value.handle, path)
+      : readFileFromDirEntry(rightDir.value.entry!, path)
+    const [leftContent, rightContent] = await Promise.all([leftRead, rightRead])
     folderLeftText.value = leftContent
     folderRightText.value = rightContent
     folderView.value = 'file-diff'
+    const idx = comparableFiles.value.findIndex(r => r.relativePath === path)
+    folderFileIndex.value = idx >= 0 ? idx : 0
+  } catch {
+    folderError.value = `Failed to read file: ${path}`
+  }
+}
+
+function navigateFolderFile(direction: 'prev' | 'next') {
+  const files = comparableFiles.value
+  if (files.length === 0) return
+  let idx = folderFileIndex.value
+  if (direction === 'next') idx = (idx + 1) % files.length
+  else idx = (idx - 1 + files.length) % files.length
+  folderFileIndex.value = idx
+  const targetPath = files[idx].relativePath
+  selectedFilePath.value = targetPath
+  // reload content for selected file
+  loadFolderFileContent(targetPath)
+}
+
+async function loadFolderFileContent(path: string) {
+  if (!leftDir.value || !rightDir.value) return
+  folderFileLanguage.value = detectLanguageFromFilename(path)
+  try {
+    const leftRead = leftDir.value.handle
+      ? readFileFromDir(leftDir.value.handle, path)
+      : readFileFromDirEntry(leftDir.value.entry!, path)
+    const rightRead = rightDir.value.handle
+      ? readFileFromDir(rightDir.value.handle, path)
+      : readFileFromDirEntry(rightDir.value.entry!, path)
+    const [leftContent, rightContent] = await Promise.all([leftRead, rightRead])
+    folderLeftText.value = leftContent
+    folderRightText.value = rightContent
   } catch {
     folderError.value = `Failed to read file: ${path}`
   }
@@ -443,14 +720,18 @@ function goHome() {
   diffStats.value = { additions: 0, deletions: 0, modifications: 0 }
   folderView.value = 'input'
   mergeView.value = 'input'
+  c3View.value = 'input'
   folderLeftText.value = ''
   folderRightText.value = ''
 }
 
-function switchMode(newMode: 'file' | 'folder' | 'merge') {
+function switchMode(newMode: 'file' | 'folder' | 'merge' | 'compare3') {
   mode.value = newMode
   if (newMode === 'file') {
     folderView.value = 'input'
+  }
+  if (newMode === 'compare3') {
+    c3View.value = 'input'
   }
 }
 
@@ -464,6 +745,16 @@ function handleExportJson() {
   exportJson(leftText.value, rightText.value, leftFilename.value || 'left', rightFilename.value || 'right', lines)
 }
 
+function handleFolderExportHtml() {
+  const lines = buildDiffLines(folderLeftText.value, folderRightText.value)
+  exportHtml(folderLeftText.value, folderRightText.value, `left/${selectedFilePath.value}`, `right/${selectedFilePath.value}`, lines)
+}
+
+function handleFolderExportJson() {
+  const lines = buildDiffLines(folderLeftText.value, folderRightText.value)
+  exportJson(folderLeftText.value, folderRightText.value, `left/${selectedFilePath.value}`, `right/${selectedFilePath.value}`, lines)
+}
+
 function resetFolder() {
   leftDir.value = null
   rightDir.value = null
@@ -471,6 +762,49 @@ function resetFolder() {
   selectedFilePath.value = ''
   folderView.value = 'input'
   folderError.value = ''
+}
+
+// 3-Way Compare functions
+
+function handleC3CompareFiles(data: { left: string; middle: string; right: string; leftName: string; middleName: string; rightName: string }) {
+  c3LeftText.value = data.left
+  c3MiddleText.value = data.middle
+  c3RightText.value = data.right
+  c3LeftName.value = data.leftName
+  c3MiddleName.value = data.middleName
+  c3RightName.value = data.rightName
+  c3View.value = 'editor'
+}
+
+function handleC3CompareFolders(data: { left: DirSnapshot; middle: DirSnapshot; right: DirSnapshot }) {
+  c3LeftDir.value = data.left
+  c3MiddleDir.value = data.middle
+  c3RightDir.value = data.right
+  c3CompareResults.value = compareDirs3(data.left, data.middle, data.right)
+  c3View.value = 'folder'
+}
+
+async function handleC3OpenFileDiff(path: string) {
+  if (!c3LeftDir.value || !c3MiddleDir.value || !c3RightDir.value) return
+  c3SelectedPath.value = path
+  try {
+    c3FolderLanguage.value = detectLanguageFromFilename(path)
+    const dirs = [c3LeftDir.value, c3MiddleDir.value, c3RightDir.value]
+    const reads = dirs.map(d => {
+      if (!d) return Promise.resolve('')
+      if (d.handle) return readFileFromDir(d.handle, path).catch(() => '')
+      if (d.entry) return readFileFromDirEntry(d.entry, path).catch(() => '')
+      return Promise.resolve('')
+    })
+    const [leftContent, middleContent, rightContent] = await Promise.all(reads)
+    c3FolderLeftText.value = leftContent
+    c3FolderMiddleText.value = middleContent
+    c3FolderRightText.value = rightContent
+    c3View.value = 'file-diff'
+  } catch (err) {
+    console.error('Failed to open file diff:', err)
+    alert(`Failed to read file: ${String(err)}`)
+  }
 }
 </script>
 
@@ -537,15 +871,68 @@ function resetFolder() {
 .file-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
   padding: 8px 16px;
   background: var(--bg-file-bar);
   border-bottom: 1px solid var(--border-main);
 }
 
+.file-bar-left, .file-bar-right {
+  flex: 1;
+}
+
+.file-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-bar-right {
+  text-align: right;
+}
+
+.file-position {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-btn-small {
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border-dashed);
+  border-radius: 4px;
+  background: var(--bg-toolbar);
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.nav-btn-small:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.nav-btn-small:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sep {
+  color: var(--border-light);
+  font-size: 14px;
+}
+
 .file-info {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.left-file {
+  color: #4a9eff;
+  font-weight: 600;
+}
+
+.right-file {
+  color: #e67e22;
+  font-weight: 600;
 }
 
 .change-btn {
@@ -763,6 +1150,9 @@ function resetFolder() {
   --badge-identical-text: #7f8c8d;
   --error-text: #e74c3c;
   --size-right-text: #27ae60;
+  --diff-3-left: rgba(34, 197, 94, 0.12);
+  --diff-3-right: rgba(239, 68, 68, 0.12);
+  --diff-3-middle: rgba(234, 179, 8, 0.12);
 }
 
 [data-theme="dark"] {
@@ -800,6 +1190,9 @@ function resetFolder() {
   --badge-identical-text: #aaa;
   --error-text: #e86868;
   --size-right-text: #7ddf7d;
+  --diff-3-left: rgba(34, 197, 94, 0.22);
+  --diff-3-right: rgba(239, 68, 68, 0.22);
+  --diff-3-middle: rgba(234, 179, 8, 0.22);
 }
 
 .logo-area { color: #222; }
@@ -809,4 +1202,8 @@ function resetFolder() {
 [data-theme="dark"] textarea::placeholder {
   color: var(--text-muted);
 }
+
+.diff-3-left { background: var(--diff-3-left); }
+.diff-3-right { background: var(--diff-3-right); }
+.diff-3-middle { background: var(--diff-3-middle); }
 </style>

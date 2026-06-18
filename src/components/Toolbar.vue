@@ -1,10 +1,5 @@
 <template>
   <div class="toolbar">
-    <div class="toolbar-left">
-      <span class="filename" v-if="leftFilename">Left: {{ leftFilename }}</span>
-      <span class="filename" v-if="rightFilename">Right: {{ rightFilename }}</span>
-    </div>
-
     <div class="toolbar-center">
       <label class="toggle-label">
         <input
@@ -141,6 +136,16 @@ defineEmits<{
 .filename {
   font-size: 13px;
   color: var(--text-filename);
+}
+
+.left-file {
+  color: #4a9eff;
+  font-weight: 600;
+}
+
+.right-file {
+  color: #e67e22;
+  font-weight: 600;
 }
 
 .toggle-label {

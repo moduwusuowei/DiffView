@@ -1,22 +1,34 @@
 <template>
   <div class="folder-input-panel">
     <div class="folder-cards">
-      <div class="folder-side left-side">
+      <div
+        class="folder-side left-side"
+        @dragover.prevent="onDragOver($event, 'left')"
+        @dragleave.prevent="onDragLeave($event, 'left')"
+        @drop.prevent="onDrop('left', $event)"
+        :class="{ 'drag-over': leftDragOver }"
+      >
         <h3>Left (Original)</h3>
         <div class="folder-area" @click="$emit('pickleft')">
           <span v-if="leftName" class="folder-name">{{ leftName }} ({{ leftCount }} files)</span>
           <span v-else class="upload-badge">+ Select left folder</span>
         </div>
-        <span v-if="!leftName" class="folder-hint">Select left folder to compare their file structure.</span>
+        <span v-if="!leftName" class="folder-hint">Select or drag a folder to compare.</span>
       </div>
 
-      <div class="folder-side right-side">
+      <div
+        class="folder-side right-side"
+        @dragover.prevent="onDragOver($event, 'right')"
+        @dragleave.prevent="onDragLeave($event, 'right')"
+        @drop.prevent="onDrop('right', $event)"
+        :class="{ 'drag-over': rightDragOver }"
+      >
         <h3>Right (Modified)</h3>
         <div class="folder-area" @click="$emit('pickright')">
           <span v-if="rightName" class="folder-name">{{ rightName }} ({{ rightCount }} files)</span>
           <span v-else class="upload-badge">+ Select right folder</span>
         </div>
-        <span v-if="!rightName" class="folder-hint">Select right folder to compare their file structure.</span>
+        <span v-if="!rightName" class="folder-hint">Select or drag a folder to compare.</span>
       </div>
     </div>
 
@@ -33,6 +45,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+
 defineProps<{
   leftName: string
   rightName: string
@@ -41,12 +55,33 @@ defineProps<{
   error: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   pickleft: []
   pickright: []
   compare: []
   back: []
+  'drop-folder': [side: 'left' | 'right', dataTransfer: DataTransfer]
 }>()
+
+const leftDragOver = ref(false)
+const rightDragOver = ref(false)
+
+function onDragOver(event: DragEvent, side: 'left' | 'right') {
+  if (side === 'left') leftDragOver.value = true
+  else rightDragOver.value = true
+}
+
+function onDragLeave(event: DragEvent, side: 'left' | 'right') {
+  if (side === 'left') leftDragOver.value = false
+  else rightDragOver.value = false
+}
+
+function onDrop(side: 'left' | 'right', event: DragEvent) {
+  leftDragOver.value = false
+  rightDragOver.value = false
+  if (!event.dataTransfer) return
+  emit('drop-folder', side, event.dataTransfer)
+}
 </script>
 
 <style scoped>
@@ -89,6 +124,15 @@ defineEmits<{
   font-size: 14px;
   color: var(--text-h3);
   margin: 0;
+}
+
+.folder-side.drag-over {
+  border-color: #4a9eff;
+  background-color: var(--bg-card-left);
+}
+
+.folder-side.drag-over.right-side {
+  background-color: var(--bg-card-right);
 }
 
 .folder-area {

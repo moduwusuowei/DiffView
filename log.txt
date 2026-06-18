@@ -1,0 +1,6 @@
+Uncaught (in promise) TypeError: Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/python-nue7ETCQ.js?v=c52b1fdd
+editor.api2-B9jAmuU7.js?v=c52b1fdd:149048 Could not create web worker(s). Falling back to loading web worker code in main thread, which might cause UI freezes. Please see https://github.com/microsoft/monaco-editor#faq
+logOnceWebWorkerWarning @ editor.api2-B9jAmuU7.js?v=c52b1fdd:149048
+editor.api2-B9jAmuU7.js?v=c52b1fdd:149050 undefined
+logOnceWebWorkerWarning @ editor.api2-B9jAmuU7.js?v=c52b1fdd:149050
+editor.api2-B9jAmuU7.js?v=c52b1fdd:230 Uncaught Event

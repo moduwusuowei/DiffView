@@ -120,6 +120,8 @@ async function readFile(file: File, side: 'left' | 'right') {
   }
 
   const text = await file.text()
+  if (side === 'left') leftPaste.value = text
+  else rightPaste.value = text
   emitUpdate(side, { text, filename: file.name })
 }
 
@@ -193,6 +195,7 @@ function handlePaste(side: 'left' | 'right') {
 }
 
 .upload-area {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -227,7 +230,7 @@ function handlePaste(side: 'left' | 'right') {
 
 .paste-area {
   flex: 1;
-  min-height: 120px;
+  min-height: 0;
   padding: 12px;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 26px;

@@ -38,6 +38,10 @@ const props = defineProps<{
   theirsName: string
   language: string
   dark: boolean
+  fontSize: number
+  wordWrap: boolean
+  ignoreWhitespace: boolean
+  algo: 'advanced' | 'legacy'
 }>()
 
 const emit = defineEmits<{
@@ -69,8 +73,10 @@ onMounted(() => {
     readOnly: true,
     renderSideBySide: true,
     automaticLayout: true,
-    ignoreTrimWhitespace: true,
-    fontSize: 13,
+    ignoreTrimWhitespace: props.ignoreWhitespace,
+    fontSize: props.fontSize,
+    wordWrap: props.wordWrap ? 'on' : 'off',
+    diffAlgorithm: props.algo,
     minimap: { enabled: false }
   }
   monaco.editor.setTheme(props.dark ? 'vs-dark' : 'vs')
@@ -96,6 +102,30 @@ onBeforeUnmount(() => {
 
 watch(() => props.dark, (val) => {
   monaco.editor.setTheme(val ? 'vs-dark' : 'vs')
+})
+
+watch(() => props.fontSize, (val) => {
+  const opts = { fontSize: val }
+  leftEditor?.updateOptions(opts)
+  rightEditor?.updateOptions(opts)
+})
+
+watch(() => props.wordWrap, (val) => {
+  const opts: monaco.editor.IDiffEditorOptions = { wordWrap: val ? 'on' : 'off' }
+  leftEditor?.updateOptions(opts)
+  rightEditor?.updateOptions(opts)
+})
+
+watch(() => props.ignoreWhitespace, (val) => {
+  const opts = { ignoreTrimWhitespace: val }
+  leftEditor?.updateOptions(opts)
+  rightEditor?.updateOptions(opts)
+})
+
+watch(() => props.algo, (val) => {
+  const opts = { diffAlgorithm: val }
+  leftEditor?.updateOptions(opts)
+  rightEditor?.updateOptions(opts)
 })
 
 function onResultInput() {

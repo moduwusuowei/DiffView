@@ -1,27 +1,45 @@
 <template>
   <div class="merge-input-panel">
     <div class="merge-cards">
-      <div class="merge-side">
+      <div
+        class="merge-side"
+        :class="{ 'drag-over': mergeDragOver === 'base' }"
+        @dragover.prevent="mergeDragOver = 'base'"
+        @dragleave.prevent="mergeDragOver = ''"
+        @drop.prevent="handleFileDrop('base', $event)"
+      >
         <h3>Base (Ancestor)</h3>
-        <div class="merge-area" @click="triggerFile('base')">
+        <div class="merge-area" @click="triggerFile('base')" @paste.prevent="handleDivPaste('base', $event)">
           <input ref="baseInput" type="file" accept=".txt,.md,.py,text/*" @change="handleFile('base', $event)" class="file-hidden" />
           <span v-if="baseName" class="file-name">{{ baseName }}</span>
           <span v-else class="upload-badge">+ Select base file</span>
         </div>
         <textarea v-model="baseText" placeholder="Or paste base text here..." class="merge-textarea" @input="emitChange"></textarea>
       </div>
-      <div class="merge-side ours">
+      <div
+        class="merge-side ours"
+        :class="{ 'drag-over': mergeDragOver === 'ours' }"
+        @dragover.prevent="mergeDragOver = 'ours'"
+        @dragleave.prevent="mergeDragOver = ''"
+        @drop.prevent="handleFileDrop('ours', $event)"
+      >
         <h3>Left (Ours)</h3>
-        <div class="merge-area" @click="triggerFile('ours')">
+        <div class="merge-area" @click="triggerFile('ours')" @paste.prevent="handleDivPaste('ours', $event)">
           <input ref="oursInput" type="file" accept=".txt,.md,.py,text/*" @change="handleFile('ours', $event)" class="file-hidden" />
           <span v-if="oursName" class="file-name">{{ oursName }}</span>
           <span v-else class="upload-badge">+ Select our file</span>
         </div>
         <textarea v-model="oursText" placeholder="Or paste our text here..." class="merge-textarea" @input="emitChange"></textarea>
       </div>
-      <div class="merge-side theirs">
+      <div
+        class="merge-side theirs"
+        :class="{ 'drag-over': mergeDragOver === 'theirs' }"
+        @dragover.prevent="mergeDragOver = 'theirs'"
+        @dragleave.prevent="mergeDragOver = ''"
+        @drop.prevent="handleFileDrop('theirs', $event)"
+      >
         <h3>Right (Theirs)</h3>
-        <div class="merge-area" @click="triggerFile('theirs')">
+        <div class="merge-area" @click="triggerFile('theirs')" @paste.prevent="handleDivPaste('theirs', $event)">
           <input ref="theirsInput" type="file" accept=".txt,.md,.py,text/*" @change="handleFile('theirs', $event)" class="file-hidden" />
           <span v-if="theirsName" class="file-name">{{ theirsName }}</span>
           <span v-else class="upload-badge">+ Select their file</span>
@@ -55,6 +73,7 @@ const theirsName = ref('')
 const baseInput = ref<HTMLInputElement | null>(null)
 const oursInput = ref<HTMLInputElement | null>(null)
 const theirsInput = ref<HTMLInputElement | null>(null)
+const mergeDragOver = ref('')
 
 const ready = computed(() => baseText.value && oursText.value && theirsText.value)
 
@@ -67,6 +86,11 @@ async function handleFile(side: 'base' | 'ours' | 'theirs', event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  await readFileToSide(file, side)
+  input.value = ''
+}
+
+async function readFileToSide(file: File, side: 'base' | 'ours' | 'theirs') {
   const check = shouldWarnLargeFile(file)
   if (check === 'hard') { alert('File too large (>50MB).'); return }
   if (check === 'soft') {
@@ -79,7 +103,22 @@ async function handleFile(side: 'base' | 'ours' | 'theirs', event: Event) {
   if (side === 'base') { baseText.value = text; baseName.value = file.name }
   else if (side === 'ours') { oursText.value = text; oursName.value = file.name }
   else { theirsText.value = text; theirsName.value = file.name }
-  input.value = ''
+}
+
+async function handleFileDrop(side: 'base' | 'ours' | 'theirs', event: DragEvent) {
+  mergeDragOver.value = ''
+  if (!event.dataTransfer) return
+  const file = event.dataTransfer.files[0]
+  if (!file) return
+  await readFileToSide(file, side)
+}
+
+function handleDivPaste(side: 'base' | 'ours' | 'theirs', event: ClipboardEvent) {
+  const text = event.clipboardData?.getData('text/plain')
+  if (!text) return
+  if (side === 'base') baseText.value = text
+  else if (side === 'ours') oursText.value = text
+  else theirsText.value = text
 }
 
 function emitChange() {
@@ -110,12 +149,15 @@ function emitChange() {
   border-radius: 10px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.06);
   background: var(--bg-card-left, #f5f5f5);
+  min-height: 0;
 }
 .merge-side.ours { background: var(--bg-card-left, #f0f7ff); }
 .merge-side.theirs { background: var(--bg-card-right, #fef9ee); }
 .merge-side h3 { font-size: 13px; color: var(--text-h3, #333); margin: 0; }
+.merge-side.drag-over { border: 2px solid #4a9eff; }
 .file-hidden { display: none; }
 .merge-area {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -124,6 +166,7 @@ function emitChange() {
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s, background-color 0.15s;
+  min-height: 0;
 }
 .merge-area:hover {
   border-color: var(--border-dashed-hover, #999);
@@ -136,7 +179,7 @@ function emitChange() {
 }
 .merge-textarea {
   flex: 1;
-  min-height: 100px;
+  min-height: 0;
   padding: 10px;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 13px;

@@ -55,6 +55,10 @@ onMounted(() => {
 
   editor.setModel({ original: originalModel, modified: modifiedModel })
 
+  editor.onDidUpdateDiff(() => {
+    checkDiffs()
+  })
+
   modifiedModel.onDidChangeContent(() => {
     if (ignoreUpdate) return
     emit('update:rightText', modifiedModel.getValue())
@@ -66,8 +70,6 @@ onMounted(() => {
     emit('update:leftText', originalModel.getValue())
     nextTick(checkDiffs)
   })
-
-  nextTick(checkDiffs)
 })
 
 onBeforeUnmount(() => {
