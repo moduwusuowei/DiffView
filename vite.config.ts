@@ -27,6 +27,9 @@ export default defineConfig(({ mode }) => ({
     }) : null,
     mode === 'singlefile' ? viteSingleFile() : null
   ].filter(Boolean),
+  optimizeDeps: {
+    exclude: ['monaco-editor']
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
